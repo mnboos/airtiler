@@ -1,0 +1,6 @@
+numpy==1.14.1
+overpy==0.4
+pyGeoTile==1.0.5
+requests==2.18.4
+Shapely==1.6.4.post1
+pillow==5.0.0
