@@ -117,16 +117,7 @@ def osm_downloader(bbox_name, bbox, zoom_level, output_directory):
             except:
                 # print("Intersection failed for polygon and rectangle: poly='{}', box='{}'".format(poly, tile_rect))
                 continue
-            polygons = []
-            if isinstance(poly, geometry.MultiPolygon):
-                for p in poly.geoms:
-                    if isinstance(p, geometry.Polygon):
-                        polygons.append(p)
-                    elif isinstance(p, geometry.MultiPolygon):
-                        print(poly)
-            else:
-                polygons.append(poly)
-            update_mask(mask, polygons)
+            _update_mask(mask, [poly])
 
         if res.ways and mask.max():
             file_name = "{}.tif".format(tile_name)
@@ -141,30 +132,38 @@ def osm_downloader(bbox_name, bbox, zoom_level, output_directory):
                 del response
         else:
             print("Tile is empty...")
-        with open(os.path.join(output_directory, "tiles.txt"), 'a') as f:
+        with open(tiles_path, 'a') as f:
             f.write("{}\n".format(tile_name))
     return all_downloaded
 
 
-def update_mask(mask, polygons):
+def _update_mask(mask, polygons, separate_instances=False):
     """
      * The first polygon is the exterior ring. All others are treated as interior rings and will just invert
        the corresponding area of the mask.
+    :param separate_instances:
     :param mask:
     :param polygons:
     :return:
     """
-    for p in polygons:
+    for i, p in enumerate(polygons):
         if isinstance(p, geometry.MultiPolygon):
-            update_mask(mask, p.geoms)
+            _update_mask(mask, p.geoms, True)
+            continue
         elif not isinstance(p, geometry.Polygon):
             continue
-        mask_im = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
-        ImageDraw.Draw(mask_im).polygon(p.exterior.coords, fill=255, outline=255)
-        polygons = np.array(mask_im, dtype=np.uint8)
-        invert_area = np.nonzero(polygons)
-        mask[invert_area] ^= 255
-
+        outline = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
+        fill = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
+        ImageDraw.Draw(outline).polygon(p.exterior.coords, fill=0, outline=255)
+        ImageDraw.Draw(fill).polygon(p.exterior.coords, fill=255, outline=0)
+        polygons = np.array(outline, dtype=np.uint8)
+        fillings = np.array(fill, dtype=np.uint8)
+        polygon_area = np.nonzero(polygons)
+        if separate_instances:
+            mask[polygon_area] ^= 255
+        else:
+            mask[polygon_area] = 255
+        mask[np.nonzero(fillings)] ^= 255
 
 def download():
     bboxes = {
