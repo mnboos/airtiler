@@ -1,6 +1,6 @@
 # Airtiler
 
-The airtiler helps generating training / test data for neural networks by downloading buildings from
+The airtiler generates training / test data for neural networks by downloading buildings from
 vector data from OpenStreetMap and the corresponding satellite images from Microsoft Bing Maps.
 
 It then generates binary masks from the vector data which can be used for example for instance segmentation.
