@@ -70,7 +70,6 @@ class Airtiler:
             os.makedirs(output_directory)
 
         tiles = self._tiles_from_bbox(bbox=bbox, zoom_level=zoom_level)
-        subdomain, tile_url_template = self._get_bing_data()
 
         loaded_tiles = []
         if os.path.isfile(tiles_path):
@@ -80,23 +79,25 @@ class Airtiler:
 
         all_downloaded = True
         nr_tiles = len(tiles)
-        for i, t in enumerate(tiles):
-            print("{} @ zoom {}: {:.1f}% (Tile {}/{}) -> {}".format(bbox_name, zoom_level, 100 / nr_tiles * i, i + 1,
-                                                                    nr_tiles, t.tms))
-            tms_x, tms_y = t.tms
-            tile_name = "{z}_{x}_{y}".format(z=zoom_level, x=tms_x, y=tms_y)
-            if tile_name in loaded_tiles:
-                continue
+        if tiles:
+            subdomain, tile_url_template = self._get_bing_data()
+            for i, t in enumerate(tiles):
+                print("{} @ zoom {}: {:.1f}% (Tile {}/{}) -> {}".format(bbox_name, zoom_level, 100 / nr_tiles * i, i + 1,
+                                                                        nr_tiles, t.tms))
+                tms_x, tms_y = t.tms
+                tile_name = "{z}_{x}_{y}".format(z=zoom_level, x=tms_x, y=tms_y)
+                if tile_name in loaded_tiles:
+                    continue
 
-            all_downloaded = self._process_tile(output_directory=output_directory,
-                                                subdomain=subdomain,
-                                                tile=t,
-                                                tile_name=tile_name,
-                                                tile_url_template=tile_url_template,
-                                                zoom_level=zoom_level,
-                                                separate_instances=separate_instances)
-            with open(tiles_path, 'a') as f:
-                f.write("{}\n".format(tile_name))
+                all_downloaded = self._process_tile(output_directory=output_directory,
+                                                    subdomain=subdomain,
+                                                    tile=t,
+                                                    tile_name=tile_name,
+                                                    tile_url_template=tile_url_template,
+                                                    zoom_level=zoom_level,
+                                                    separate_instances=separate_instances)
+                with open(tiles_path, 'a') as f:
+                    f.write("{}\n".format(tile_name))
         return all_downloaded
 
     def _get_bing_data(self) -> Tuple[str, str]:
