@@ -12,7 +12,7 @@ with open(path.join(curr_dir, 'requirements.txt'), encoding='utf-8') as f:
 setup(
     name='airtiler',
     packages=find_packages(exclude=('tests', 'docs')),
-    version='0.2.2',
+    version='0.2.3',
     description='The airtiler generates training / test data for neural networks by downloading buildings from vector '
                 'data from OpenStreetMap and the corresponding satellite images from Microsoft Bing Maps.',
     long_description=readme,

@@ -184,7 +184,13 @@ class Airtiler:
                 mask[polygon_area] = 255
             mask[np.nonzero(fillings)] ^= 255
 
-    def process(self, config: dict) -> bool:
+    def _process_internal(self, config: dict) -> bool:
+        """
+         * Processes the config. Throw
+        :param config:
+        :return:
+        """
+
         if "boundingboxes" not in config:
             raise RuntimeError("No 'boundingboxes' were specified in the config.")
 
@@ -226,6 +232,23 @@ class Airtiler:
                     all_downloaded = False
         return all_downloaded
 
+    def process(self, config) -> None:
+        run = True
+        while run:
+            try:
+                downloads_complete = self._process_internal(config)
+                if downloads_complete:
+                    print("{} - All downloads complete!".format(time.ctime()))
+                run = not downloads_complete
+            except KeyboardInterrupt:
+                run = False
+            except overpy.exception.OverpassTooManyRequests:
+                print("OverpassTooManyRequests: Waiting 2s...")
+                time.sleep(2)
+            except Exception as e:
+                print("Error occured: " + str(e))
+                raise e
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -240,22 +263,7 @@ def main():
         config = json.load(f)
 
     airtiler = Airtiler(bing_key=args.bing_access_token)
-
-    run = True
-    while run:
-        try:
-            downloads_complete = airtiler.process(config)
-            if downloads_complete:
-                print("{} - All downloads complete!".format(time.ctime()))
-            run = not downloads_complete
-        except KeyboardInterrupt:
-            run = False
-        except overpy.exception.OverpassTooManyRequests:
-            print("Waiting 2s for overpass...")
-            time.sleep(2)
-        except Exception as e:
-            print("Error occured: " + str(e))
-            raise e
+    airtiler.process(config)
 
 
 if __name__ == "__main__":
