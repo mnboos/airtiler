@@ -18,8 +18,15 @@ pip install airtiler
 ```
 
 ## Usage
+
 ```
 airtiler -c sample_config.json
+```
+
+### API
+```python
+airtiler = Airtiler("bing_key")
+airtiler.process(config)
 ```
 
 ### Config

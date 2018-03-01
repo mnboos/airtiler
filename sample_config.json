@@ -1,7 +1,8 @@
 {
   "options": {
-    "target_dir": "./output/blabla",
-    "zoom_levels": [15, 16, 17]
+    "target_dir": "./output",
+    "zoom_levels": [18, 19],
+    "separate_instances": false
   },
   "boundingboxes": {
     "firenze": [11.239844, 43.765851, 11.289969, 43.790065],
