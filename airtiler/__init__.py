@@ -4,6 +4,7 @@ import time
 import sys
 import os
 import overpy
+from typing import Tuple, Iterable
 from pygeotile.tile import Tile
 from pygeotile.point import Point
 import requests
@@ -32,7 +33,7 @@ out body;
 """
 
 
-def tiles_from_bbox(bbox, zoom_level):
+def _tiles_from_bbox(bbox, zoom_level):
     """
      * Returns all tiles for the specified bounding box
     """
@@ -54,9 +55,7 @@ def tiles_from_bbox(bbox, zoom_level):
     return tiles
 
 
-def osm_downloader(bbox_name, bbox, zoom_level, output_directory):
-    api = overpy.Overpass()
-
+def _download(bbox_name: str, bbox: Iterable, zoom_level: int, output_directory: str) -> bool:
     if not os.path.isdir(output_directory):
         print("Creating folder: {}".format(output_directory))
         os.makedirs(output_directory)
@@ -68,13 +67,8 @@ def osm_downloader(bbox_name, bbox, zoom_level, output_directory):
     if not os.path.isdir(output_directory):
         os.makedirs(output_directory)
 
-    tiles = tiles_from_bbox(bbox=bbox, zoom_level=zoom_level)
-    response = requests.get("https://dev.virtualearth.net/REST/V1/Imagery/Metadata/Aerial?key={key}"
-                            .format(key=secrets.BING_KEY))
-    data = response.json()
-
-    tile_url_template = data['resourceSets'][0]['resources'][0]['imageUrl']
-    subdomain = data['resourceSets'][0]['resources'][0]['imageUrlSubdomains'][0]
+    tiles = _tiles_from_bbox(bbox=bbox, zoom_level=zoom_level)
+    subdomain, tile_url_template = _get_bing_data()
 
     loaded_tiles = []
     if os.path.isfile(tiles_path):
@@ -91,54 +85,74 @@ def osm_downloader(bbox_name, bbox, zoom_level, output_directory):
         if tile_name in loaded_tiles:
             continue
 
-        sys.stdout.flush()
-        all_downloaded = False
-        minx, maxy = t.bounds[0].pixels(zoom_level)
-        maxx, miny = t.bounds[1].pixels(zoom_level)
-        b = []
-        b.extend(t.bounds[0].latitude_longitude)
-        b.extend(t.bounds[1].latitude_longitude)
-        url = tile_url_template.format(subdomain=subdomain, quadkey=t.quad_tree)
-        query = query_template.format(bbox="{},{},{},{}".format(*b), tile=t.tms)
-        # print(url)
-        # print(query)
-        res = api.query(query)
-        mask = np.zeros((IMAGE_WIDTH, IMAGE_WIDTH), dtype=np.uint8)
-        for way in res.ways:
-            points = []
-            for node in way.nodes:
-                p = Point(float(node.lat), float(node.lon))
-                px = p.pixels(zoom=zoom_level)
-                points.append((px[0]-minx, px[1]-miny))
-
-            try:
-                poly = geometry.Polygon(points)
-                tile_rect = geometry.box(0, 0, IMAGE_WIDTH, IMAGE_WIDTH)
-                poly = poly.intersection(tile_rect)
-            except:
-                # print("Intersection failed for polygon and rectangle: poly='{}', box='{}'".format(poly, tile_rect))
-                continue
-            _update_mask(mask, [poly])
-
-        if res.ways and mask.max():
-            file_name = "{}.tif".format(tile_name)
-            mask_path = os.path.join(output_directory, file_name)
-            img_path = os.path.join(output_directory, file_name+'f')
-            Image.fromarray(mask).save(mask_path)
-            if not os.path.isfile(img_path):
-                response = requests.get(url, stream=True)
-                response.raw.decode_content = True
-                with open(img_path, 'wb') as file:
-                    shutil.copyfileobj(response.raw, file)
-                del response
-        else:
-            print("Tile is empty...")
+        all_downloaded = _process_tile(output_directory=output_directory,
+                                       subdomain=subdomain,
+                                       tile=t,
+                                       tile_name=tile_name,
+                                       tile_url_template=tile_url_template,
+                                       zoom_level=zoom_level)
         with open(tiles_path, 'a') as f:
             f.write("{}\n".format(tile_name))
     return all_downloaded
 
 
-def _update_mask(mask, polygons, separate_instances=False):
+def _get_bing_data() -> Tuple[str, str]:
+    response = requests.get("https://dev.virtualearth.net/REST/V1/Imagery/Metadata/Aerial?key={key}"
+                            .format(key=secrets.BING_KEY))
+    data = response.json()
+    tile_url_template = data['resourceSets'][0]['resources'][0]['imageUrl']
+    subdomain = data['resourceSets'][0]['resources'][0]['imageUrlSubdomains'][0]
+    return subdomain, tile_url_template
+
+
+def _process_tile(output_directory: str, subdomain: str, tile: Tile, tile_name: str, tile_url_template: str,
+                  zoom_level: int, separate_instances: bool) -> bool:
+    sys.stdout.flush()
+    all_downloaded = False
+    minx, maxy = tile.bounds[0].pixels(zoom_level)
+    maxx, miny = tile.bounds[1].pixels(zoom_level)
+    b = []
+    b.extend(tile.bounds[0].latitude_longitude)
+    b.extend(tile.bounds[1].latitude_longitude)
+    url = tile_url_template.format(subdomain=subdomain, quadkey=tile.quad_tree)
+    query = query_template.format(bbox="{},{},{},{}".format(*b), tile=tile.tms)
+    # print(url)
+    # print(query)
+    api = overpy.Overpass()
+    res = api.query(query)
+    mask = np.zeros((IMAGE_WIDTH, IMAGE_WIDTH), dtype=np.uint8)
+    for way in res.ways:
+        points = []
+        for node in way.nodes:
+            p = Point(float(node.lat), float(node.lon))
+            px = p.pixels(zoom=zoom_level)
+            points.append((px[0] - minx, px[1] - miny))
+
+        try:
+            poly = geometry.Polygon(points)
+            tile_rect = geometry.box(0, 0, IMAGE_WIDTH, IMAGE_WIDTH)
+            poly = poly.intersection(tile_rect)
+        except:
+            # print("Intersection failed for polygon and rectangle: poly='{}', box='{}'".format(poly, tile_rect))
+            continue
+        _update_mask(mask, [poly], separate_instances=separate_instances)
+    if res.ways and mask.max():
+        file_name = "{}.tif".format(tile_name)
+        mask_path = os.path.join(output_directory, file_name)
+        img_path = os.path.join(output_directory, file_name + 'f')
+        Image.fromarray(mask).save(mask_path)
+        if not os.path.isfile(img_path):
+            response = requests.get(url, stream=True)
+            response.raw.decode_content = True
+            with open(img_path, 'wb') as file:
+                shutil.copyfileobj(response.raw, file)
+            del response
+    else:
+        print("Tile is empty...")
+    return all_downloaded
+
+
+def _update_mask(mask: np.ndarray, polygons: Iterable, separate_instances: bool = False) -> None:
     """
      * The first polygon is the exterior ring. All others are treated as interior rings and will just invert
        the corresponding area of the mask.
@@ -157,9 +171,9 @@ def _update_mask(mask, polygons, separate_instances=False):
         fill = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
         ImageDraw.Draw(outline).polygon(p.exterior.coords, fill=0, outline=255)
         ImageDraw.Draw(fill).polygon(p.exterior.coords, fill=255, outline=0)
-        polygons = np.array(outline, dtype=np.uint8)
+        outlines = np.array(outline, dtype=np.uint8)
         fillings = np.array(fill, dtype=np.uint8)
-        polygon_area = np.nonzero(polygons)
+        polygon_area = np.nonzero(outlines)
         if separate_instances:
             mask[polygon_area] ^= 255
         else:
@@ -167,7 +181,7 @@ def _update_mask(mask, polygons, separate_instances=False):
         mask[np.nonzero(fillings)] ^= 255
 
 
-def download(config: dict) -> bool:
+def process(config: dict) -> bool:
     if "boundingboxes" not in config:
         raise RuntimeError("No 'boundingboxes' were specified in the config.")
 
@@ -199,10 +213,10 @@ def download(config: dict) -> bool:
             raise RuntimeError("Neither the config nor the bounding box '{}' have any zoom_levels specified.")
 
         for z in zoom_levels:
-            complete = osm_downloader(bbox_name=bbox_name,
-                                      bbox=bbox,
-                                      zoom_level=z,
-                                      output_directory=os.path.join(output_directory, bbox_name))
+            complete = _download(bbox_name=bbox_name,
+                                 bbox=bbox,
+                                 zoom_level=z,
+                                 output_directory=os.path.join(output_directory, bbox_name))
             if not complete:
                 all_downloaded = False
     return all_downloaded
@@ -222,7 +236,7 @@ if __name__ == "__main__":
     run = True
     while run:
         try:
-            downloads_complete = download(config)
+            downloads_complete = process(config)
             if downloads_complete:
                 print("{} - All downloads complete!".format(time.ctime()))
             run = not downloads_complete

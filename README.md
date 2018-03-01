@@ -33,13 +33,15 @@ Key|Description
 ---|---
 target_dir|The directory where the files will be written to
 zoom_levels|Global zoom levels which will be used, if a boundingbox if specified in short format or has no boundingboxes.
+separate_instances|If true, each building instance will be separated. Otherwise, a building consisting from multiple instances will be rendered as one.
 
 ### Sample config
 ```json
 {
   "options": {
     "target_dir": "./output/blabla",
-    "zoom_levels": [15, 16, 17]
+    "zoom_levels": [15, 16, 17],
+    "separate_instances": false
   },
   "boundingboxes": {
     "firenze": [11.239844, 43.765851, 11.289969, 43.790065],
