@@ -1,5 +1,7 @@
 # Airtiler
 
+[![Build Status](https://travis-ci.org/mnboos/airtiler.svg?branch=master)](https://travis-ci.org/mnboos/airtiler)
+
 The airtiler generates training / test data for neural networks by downloading buildings from
 vector data from OpenStreetMap and the corresponding satellite images from Microsoft Bing Maps.
 
