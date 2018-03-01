@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import json
 import argparse
 import time
@@ -225,7 +227,7 @@ class Airtiler:
         return all_downloaded
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', type=str, help="Path to the configuration file", required=True)
     parser.add_argument('-k', '--bing-access-token', type=str, help="Access key to the Bing REST API", required=True)
@@ -254,3 +256,7 @@ if __name__ == "__main__":
         except Exception as e:
             print("Error occured: " + str(e))
             raise e
+
+
+if __name__ == "__main__":
+    main()
