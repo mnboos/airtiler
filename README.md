@@ -34,7 +34,7 @@ airtiler.process(config)
 ### Config
 Key|Required
 ---|---
-options|-
+options|
 boundingboxes|Yes
 
 #### Options (optional)
