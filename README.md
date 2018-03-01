@@ -11,5 +11,57 @@ Instance Separation|Image|Mask
 False|![](images/image2.png)|![](images/mask2.png)
 True|![](images/image1.png)|![](images/mask1.png)
 
+## Installation
+To install airtiler run:
+```python
+pip install airtiler
+```
+
 ## Usage
-tbd
+```
+airtiler -c sample_config.json
+```
+
+### Config
+Key|Required
+---|---
+options|-
+boundingboxes|Yes
+
+#### Options (optional)
+Key|Description
+---|---
+target_dir|The directory where the files will be written to
+zoom_levels|Global zoom levels which will be used, if a boundingbox if specified in short format or has no boundingboxes.
+
+### Sample config
+```json
+{
+  "options": {
+    "target_dir": "./output/blabla",
+    "zoom_levels": [15, 16, 17]
+  },
+  "boundingboxes": {
+    "firenze": [11.239844, 43.765851, 11.289969, 43.790065],
+    "rapperswil": {
+      "zoom_levels": [17, 18],
+      "tr": 8.818724,
+      "tl": 47.222126,
+      "br": 8.847435,
+      "bl": 47.234629
+    },
+    "new_york": {
+      "tr": -74.02059,
+      "tl": 40.646089,
+      "br": -73.864722,
+      "bl": 40.77413
+    }
+  }
+}
+```
+
+
+## Projects
+The airtiler is used in the following projects:
+
+- [Deep OSM - Instance segmentation using orthophotos and OSM data](https://github.com/mnboos/osm-instance-segmentation)

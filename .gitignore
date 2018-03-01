@@ -2,6 +2,7 @@ secrets.py
 *.tiff
 *.tif
 *.h5
+.pytest_cache
 model/*.h5
 
 *.pyc

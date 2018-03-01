@@ -1,3 +1,5 @@
+import json
+import argparse
 import time
 import sys
 import os
@@ -14,7 +16,6 @@ import random
 
 
 IMAGE_WIDTH = 256
-IMAGE_OUTPUT_FOLDER = r"C:\Temp\test\img"
 
 
 query_template = """
@@ -165,130 +166,63 @@ def _update_mask(mask, polygons, separate_instances=False):
             mask[polygon_area] = 255
         mask[np.nonzero(fillings)] ^= 255
 
-def download():
-    bboxes = {
-        'chicago': [-87.779857, 41.87806, -87.659265, 41.953457],
-        'chicago2': [-87.739813, 41.837528, -87.70282, 41.865722],
-        'firenze': [11.239844, 43.765851, 11.289969, 43.790065],
-        'nuernberg': [11.046668, 49.470696, 11.129795, 49.492332],
-        'wettingen': [8.309857, 47.456269, 8.340327, 47.473386],
-        'duebendorf': [8.606587, 47.392654, 8.627401, 47.404593],
-        'goldach': {
-            'tr': 9.462776,
-            'tl': 47.465723,
-            'br': 9.489598,
-            'bl': 47.485157
-        },
-        'stgallen': {
-            'tr': 9.405892,
-            'tl': 47.433161,
-            'br': 9.424131,
-            'bl': 47.444191
-        },
-        'rapperswil': {
-            'tr': 8.818724,
-            'tl': 47.222126,
-            'br': 8.847435,
-            'bl': 47.234629
-        },
-        'hombrechtikon': {
-            'tr': 8.815956,
-            'tl': 47.237018,
-            'br': 8.826664,
-            'bl': 47.247157
-        },
-        'zurich': {
-            'tr': 8.47716,
-            'tl': 47.36036,
-            'br': 8.573806,
-            'bl': 47.401508,
-        },
-        'boston_financial_district': {
-            'tr': -71.07081,
-            'tl': 42.351557,
-            'br': -71.053601,
-            'bl': 42.362942
-        },
-        'boston_houses': {
-            'tr': -71.079802,
-            'tl': 42.280151,
-            'br': -71.05062,
-            'bl': 42.29958
-        },
-        'bern': {
-            'tr': 7.420455,
-            'tl': 46.935277,
-            'br': 7.46337,
-            'bl': 46.965862
-        },
-        'new_york': {
-            'tr': -74.02059,
-            'tl': 40.646089,
-            'br': -73.864722,
-            'bl': 40.77413
-        },
-        'berlin': {
-            'tr': 13.326222,
-            'tl': 52.418412,
-            'br': 13.548696,
-            'bl': 52.563071
-        },
-        'munich': {
-            'tr': 11.465968,
-            'tl': 48.096287,
-            'br': 11.626643,
-            'bl': 48.189756
-        },
-        'rome': {
-            'tr': 12.449309,
-            'tl': 41.869589,
-            'br': 12.531363,
-            'bl': 41.923766
-        },
-        'san_francisco': {
-            'tr': -122.508763,
-            'tl': 37.714932,
-            'br': -122.383106,
-            'bl': 37.787682
-        },
-    }
 
-    print(sys.argv)
-    if len(sys.argv) > 1:
-        city = sys.argv[1]
-        valid_cities = bboxes.keys()
-        if city not in valid_cities:
-            raise RuntimeError("'{}' is not a valid city. Valid cities are: {}".format(city, valid_cities))
-        cities = [city]
-    else:
-        cities = list(bboxes.keys())
-        random.shuffle(cities)
+def download(config: dict) -> bool:
+    if "boundingboxes" not in config:
+        raise RuntimeError("No 'boundingboxes' were specified in the config.")
 
-    target_folder = IMAGE_OUTPUT_FOLDER
-    if not os.path.isdir(target_folder):
-        target_folder = "/training-data"
+    bboxes = config['boundingboxes']
+    cities = list(bboxes.keys())
+    random.shuffle(cities)
+
+    options = config.get("options", {})
+    gloabl_zoom_levels = options.get("zoom_levels", [])
+
+    output_directory = options.get("target_dir", ".")
+    if not os.path.isabs(output_directory):
+        output_directory = os.path.join(os.getcwd(), output_directory)
+    if not os.path.isdir(output_directory):
+        os.makedirs(output_directory)
+    assert os.path.isdir(output_directory)
 
     all_downloaded = True
     for bbox_name in cities:
-        print("Processing bbox '{}'".format(bbox_name))
+        print("Processing '{}'...".format(bbox_name))
         bbox = bboxes[bbox_name]
-        # zoom_levels = [18, 19]
-        zoom_levels = [17]
+
+        zoom_levels = gloabl_zoom_levels
+        if isinstance(bbox, dict):
+            if 'zoom_levels' in bbox:
+                zoom_levels = bbox['zoom_levels']
+
+        if not zoom_levels:
+            raise RuntimeError("Neither the config nor the bounding box '{}' have any zoom_levels specified.")
+
         for z in zoom_levels:
             complete = osm_downloader(bbox_name=bbox_name,
                                       bbox=bbox,
                                       zoom_level=z,
-                                      output_directory=os.path.join(target_folder, bbox_name))
+                                      output_directory=os.path.join(output_directory, bbox_name))
             if not complete:
                 all_downloaded = False
     return all_downloaded
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', type=str, help="Path to the configuration file", required=True)
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.config):
+        raise FileNotFoundError("Config file does not exist")
+
+    with open(args.config, 'r') as f:
+        config = json.load(f)
+
     run = True
     while run:
         try:
-            downloads_complete = download()
+            downloads_complete = download(config)
             if downloads_complete:
                 print("{} - All downloads complete!".format(time.ctime()))
             run = not downloads_complete
