@@ -107,7 +107,7 @@ class Airtiler:
     def _get_bing_data(self) -> Tuple[str, str]:
         response = requests.get("https://dev.virtualearth.net/REST/V1/Imagery/Metadata/Aerial?key={key}"
                                 .format(key=self._bing_key))
-        data: dict = response.json()
+        data = response.json()
         resource_set = self._get(data.get('resourceSets', []), 0, {})
         resource = self._get(resource_set.get('resources', []), 0, {})
         subdomain = self._get(resource.get('imageUrlSubdomains', []), 0, None)
