@@ -5,6 +5,8 @@ python:
   - "pypy3"
   - "3.5-dev"
   - "3.6-dev"
+env:
+  BING_KEY: $BING_KEY
 install: "pip install -r requirements.txt"
 script: py.test
 notifications:

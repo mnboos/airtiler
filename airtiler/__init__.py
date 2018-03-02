@@ -84,32 +84,39 @@ class Airtiler:
         nr_tiles = len(tiles)
         if tiles:
             subdomain, tile_url_template = self._get_bing_data()
-            for i, t in enumerate(tiles):
-                print("{} @ zoom {}: {:.1f}% (Tile {}/{}) -> {}".format(bbox_name, zoom_level, 100 / nr_tiles * i, i + 1,
-                                                                        nr_tiles, t.tms))
-                tms_x, tms_y = t.tms
-                tile_name = "{z}_{x}_{y}".format(z=zoom_level, x=tms_x, y=tms_y)
-                if tile_name in loaded_tiles:
-                    continue
+            if subdomain and tile_url_template:
+                for i, t in enumerate(tiles):
+                    print("{} @ zoom {}: {:.1f}% (Tile {}/{}) -> {}".format(bbox_name, zoom_level, 100 / nr_tiles * i, i + 1,
+                                                                            nr_tiles, t.tms))
+                    tms_x, tms_y = t.tms
+                    tile_name = "{z}_{x}_{y}".format(z=zoom_level, x=tms_x, y=tms_y)
+                    if tile_name in loaded_tiles:
+                        continue
 
-                all_downloaded = self._process_tile(output_directory=output_directory,
-                                                    subdomain=subdomain,
-                                                    tile=t,
-                                                    tile_name=tile_name,
-                                                    tile_url_template=tile_url_template,
-                                                    zoom_level=zoom_level,
-                                                    separate_instances=separate_instances)
-                with open(tiles_path, 'a') as f:
-                    f.write("{}\n".format(tile_name))
+                    all_downloaded = self._process_tile(output_directory=output_directory,
+                                                        subdomain=subdomain,
+                                                        tile=t,
+                                                        tile_name=tile_name,
+                                                        tile_url_template=tile_url_template,
+                                                        zoom_level=zoom_level,
+                                                        separate_instances=separate_instances)
+                    with open(tiles_path, 'a') as f:
+                        f.write("{}\n".format(tile_name))
         return all_downloaded
 
     def _get_bing_data(self) -> Tuple[str, str]:
         response = requests.get("https://dev.virtualearth.net/REST/V1/Imagery/Metadata/Aerial?key={key}"
                                 .format(key=self._bing_key))
-        data = response.json()
-        tile_url_template = data['resourceSets'][0]['resources'][0]['imageUrl']
-        subdomain = data['resourceSets'][0]['resources'][0]['imageUrlSubdomains'][0]
-        return subdomain, tile_url_template
+        data: dict = response.json()
+        resource_set = self._get(data.get('resourceSets', []), 0, {})
+        resource = self._get(resource_set.get('resources', []), 0, {})
+        subdomain = self._get(resource.get('imageUrlSubdomains', []), 0, None)
+        image_url = resource.get('imageUrl', None)
+        return subdomain, image_url
+
+    @staticmethod
+    def _get(coll, index, default):
+        return coll[index] if len(coll) > index else default
 
     def _process_tile(self, output_directory: str, subdomain: str, tile: Tile, tile_name: str, tile_url_template: str,
                       zoom_level: int, separate_instances: bool) -> bool:

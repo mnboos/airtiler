@@ -1,5 +1,6 @@
 from airtiler import Airtiler
 import json
+import os
 
 empty_config = """
 {
@@ -9,7 +10,8 @@ empty_config = """
     "separate_instances": false
   },
   "boundingboxes": {
-    "empty": [11, 43, 10, 43]
+    "empty": [11, 43, 10, 43],
+    "single_building": [8.8183594613,47.2228679539,8.819253978,47.2234162581]
   }
 }
 """
@@ -17,4 +19,4 @@ empty_config = """
 
 def test_airtiler():
     config = json.loads(empty_config)
-    Airtiler("").process(config)
+    Airtiler(os.environ.get("BING_KEY", "")).process(config)
