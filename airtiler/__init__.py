@@ -35,6 +35,7 @@ out body;
 class Airtiler:
     def __init__(self, bing_key):
         self._bing_key = bing_key
+        self._tile_rect = geometry.box(0, 0, IMAGE_WIDTH, IMAGE_WIDTH)
 
     @staticmethod
     def _tiles_from_bbox(bbox, zoom_level):
@@ -126,6 +127,7 @@ class Airtiler:
         api = overpy.Overpass()
         res = api.query(query)
         mask = np.zeros((IMAGE_WIDTH, IMAGE_WIDTH), dtype=np.uint8)
+
         for way in res.ways:
             points = []
             for node in way.nodes:
@@ -134,11 +136,13 @@ class Airtiler:
                 points.append((px[0] - minx, px[1] - miny))
 
             try:
-                poly = geometry.Polygon(points)
-                tile_rect = geometry.box(0, 0, IMAGE_WIDTH, IMAGE_WIDTH)
-                poly = poly.intersection(tile_rect)
+                if not poly.is_valid:
+                    clean = poly.buffer(0)
+                    poly = clean.intersection(self._tile_rect)
+                else:
+                    poly = poly.intersection(self._tile_rect)
             except:
-                # print("Intersection failed for polygon and rectangle: poly='{}', box='{}'".format(poly, tile_rect))
+                print("Intersection failed for polygon and rectangle: {}, {}".format(poly, self._tile_rect))
                 continue
             self._update_mask(mask, [poly], separate_instances=separate_instances)
         if res.ways and mask.max():
