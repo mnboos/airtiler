@@ -136,13 +136,12 @@ class Airtiler:
                 points.append((px[0] - minx, px[1] - miny))
 
             try:
+                poly = geometry.Polygon(points)
                 if not poly.is_valid:
-                    clean = poly.buffer(0)
-                    poly = clean.intersection(self._tile_rect)
-                else:
-                    poly = poly.intersection(self._tile_rect)
+                    poly = poly.buffer(0)
+                poly = poly.intersection(self._tile_rect)
             except:
-                print("Intersection failed for polygon and rectangle: {}, {}".format(poly, self._tile_rect))
+                # print("Intersection failed for polygon and rectangle: {}, {}".format(poly, self._tile_rect))
                 continue
             self._update_mask(mask, [poly], separate_instances=separate_instances)
         if res.ways and mask.max():
