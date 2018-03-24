@@ -1,4 +1,5 @@
 from airtiler import Airtiler
+from PIL import Image
 import json
 import os
 import glob
@@ -37,14 +38,27 @@ def _cleanup(path):
 
 def test_empty_config():
     config = json.loads(empty_config)
-    Airtiler("").process(config)
+    Airtiler(bing_key="").process(config)
 
 
 def test_single_building_config():
     _cleanup("./output/single_building")
     config = json.loads(single_building_config)
     key = os.environ.get("BING_KEY", "")
-    Airtiler(key).process(config)
+    Airtiler(bing_key=key).process(config)
     images = glob.glob("./output/single_building/**/*.tif*", recursive=True)
     expected_nr_images = 2 if not key else 4  # on travis the bing key is set and therefore the tile can be downloaded
     assert len(images) == expected_nr_images
+
+
+def test_download_bbox():
+    IMG_SIZE = 512
+    a = Airtiler(image_width=IMG_SIZE)
+    a.download_bbox(min_lat=47.2236615975,
+                    min_lon=8.8132623492,
+                    max_lat=47.2276689455,
+                    max_lon=8.820407754,
+                    output_directory="./output/download_bbox",
+                    file_name="single_bbox")
+    img = Image.open("./output/download_bbox/single_bbox.tif")
+    assert img.size == (IMG_SIZE, IMG_SIZE)
