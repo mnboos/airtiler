@@ -84,27 +84,31 @@ class Airtiler:
         nr_tiles = len(tiles)
         if tiles:
             subdomain, tile_url_template = self._get_bing_data()
-            if subdomain and tile_url_template:
-                for i, t in enumerate(tiles):
-                    print("{} @ zoom {}: {:.1f}% (Tile {}/{}) -> {}".format(bbox_name, zoom_level, 100 / nr_tiles * i, i + 1,
-                                                                            nr_tiles, t.tms))
-                    tms_x, tms_y = t.tms
-                    tile_name = "{z}_{x}_{y}".format(z=zoom_level, x=tms_x, y=tms_y)
-                    if tile_name in loaded_tiles:
-                        continue
+            bing_url = None
+            for i, t in enumerate(tiles):
+                print("{} @ zoom {}: {:.1f}% (Tile {}/{}) -> {}".format(bbox_name, zoom_level, 100 / nr_tiles * i, i + 1,
+                                                                        nr_tiles, t.tms))
+                tms_x, tms_y = t.tms
+                tile_name = "{z}_{x}_{y}".format(z=zoom_level, x=tms_x, y=tms_y)
+                if tile_name in loaded_tiles:
+                    continue
 
-                    all_downloaded = self._process_tile(output_directory=output_directory,
-                                                        subdomain=subdomain,
-                                                        tile=t,
-                                                        tile_name=tile_name,
-                                                        tile_url_template=tile_url_template,
-                                                        zoom_level=zoom_level,
-                                                        separate_instances=separate_instances)
-                    with open(tiles_path, 'a') as f:
-                        f.write("{}\n".format(tile_name))
+                if tile_url_template and subdomain:
+                    bing_url = tile_url_template.format(subdomain=subdomain, quadkey=t.quad_tree)
+                all_downloaded = self._process_tile(output_directory=output_directory,
+                                                    bing_url=bing_url,
+                                                    tile=t,
+                                                    tile_name=tile_name,
+                                                    zoom_level=zoom_level,
+                                                    separate_instances=separate_instances)
+                with open(tiles_path, 'a') as f:
+                    f.write("{}\n".format(tile_name))
         return all_downloaded
 
-    def _get_bing_data(self) -> Tuple[str, str]:
+    def _get_bing_data(self) -> Tuple:
+        if not self._bing_key:
+            return None, None
+
         response = requests.get("https://dev.virtualearth.net/REST/V1/Imagery/Metadata/Aerial?key={key}"
                                 .format(key=self._bing_key))
         data = response.json()
@@ -118,19 +122,17 @@ class Airtiler:
     def _get(coll, index, default):
         return coll[index] if len(coll) > index else default
 
-    def _process_tile(self, output_directory: str, subdomain: str, tile: Tile, tile_name: str, tile_url_template: str,
+    def _process_tile(self, output_directory: str, bing_url: str, tile: Tile, tile_name: str,
                       zoom_level: int, separate_instances: bool) -> bool:
         sys.stdout.flush()
         all_downloaded = False
-        minx, maxy = tile.bounds[0].pixels(zoom_level)
-        maxx, miny = tile.bounds[1].pixels(zoom_level)
+        minx, _ = tile.bounds[0].pixels(zoom_level)
+        _, miny = tile.bounds[1].pixels(zoom_level)
         b = []
         b.extend(tile.bounds[0].latitude_longitude)
         b.extend(tile.bounds[1].latitude_longitude)
-        url = tile_url_template.format(subdomain=subdomain, quadkey=tile.quad_tree)
         query = query_template.format(bbox="{},{},{},{}".format(*b), tile=tile.tms)
-        # print(url)
-        # print(query)
+
         api = overpy.Overpass()
         res = api.query(query)
         mask = np.zeros((IMAGE_WIDTH, IMAGE_WIDTH), dtype=np.uint8)
@@ -148,7 +150,6 @@ class Airtiler:
                     poly = poly.buffer(0)
                 poly = poly.intersection(self._tile_rect)
             except:
-                # print("Intersection failed for polygon and rectangle: {}, {}".format(poly, self._tile_rect))
                 continue
             self._update_mask(mask, [poly], separate_instances=separate_instances)
         if res.ways and mask.max():
@@ -156,15 +157,19 @@ class Airtiler:
             mask_path = os.path.join(output_directory, file_name)
             img_path = os.path.join(output_directory, file_name + 'f')
             Image.fromarray(mask).save(mask_path)
-            if not os.path.isfile(img_path):
-                response = requests.get(url, stream=True)
-                response.raw.decode_content = True
-                with open(img_path, 'wb') as file:
-                    shutil.copyfileobj(response.raw, file)
-                del response
+            if bing_url and not os.path.isfile(img_path):
+                self._download_imagery(bing_url, img_path)
         else:
             print("Tile is empty...")
         return all_downloaded
+
+    @staticmethod
+    def _download_imagery(bing_url, img_path):
+        response = requests.get(bing_url, stream=True)
+        response.raw.decode_content = True
+        with open(img_path, 'wb') as file:
+            shutil.copyfileobj(response.raw, file)
+        del response
 
     def _update_mask(self, mask: np.ndarray, polygons: Iterable, separate_instances: bool = False) -> None:
         """
