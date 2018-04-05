@@ -19,9 +19,8 @@ import random
 query_template = """
 [out:json][timeout:50];
 ( 
-  relation["building"]({bbox});
-  //node["building"]({bbox});
-  way["building"]({bbox});
+  relation["{tag}"]({bbox});
+  way["{tag}"]({bbox});
 );
 //out geom;
 (._;>;);
@@ -122,19 +121,40 @@ class Airtiler:
 
         min_lat, min_lon = tile.bounds[0].latitude_longitude
         max_lat, max_lon = tile.bounds[1].latitude_longitude
-        return self.download_bbox(min_lat, min_lon, max_lat, max_lon, output_directory, tile_name, separate_instances,
-                                  bing_url)
+        return self.download_bbox(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat,
+                                  output_directory=output_directory, file_name=tile_name,
+                                  separate_instances=separate_instances, bing_url=bing_url)
 
-    def download_bbox(self, min_lat, min_lon, max_lat, max_lon, output_directory, file_name, separate_instances=False,
-                      bing_url=None):
+    highway_width = {
+        "motorway": 4,
+        "motorway_link": 4,
+        "trunk": 4,
+        "trunk_link": 4,
+        "primary": 4,
+        "primary_link": 4,
+        "secondary": 2,
+        "secondary_link": 2,
+        "tertiary": 1.5,
+        "tertiary_link": 1.5,
+        "unclassified": 1.5,
+        "residential": 1.5,
+        # "service": .4,
+    }
+
+    def download_bbox(self, min_lon, min_lat, max_lon, max_lat, output_directory, file_name, separate_instances=False,
+                      bing_url=None, tag=None, invert_intersection=True):
         if not os.path.isdir(output_directory):
             os.makedirs(output_directory)
+
         offset_lat = max_lat - min_lat
         offset_lon = max_lon - min_lon
         pixels_per_lat = self._image_width / offset_lat
         pixels_per_lon = self._image_width / offset_lon
         bbox = "{},{},{},{}".format(min_lat, min_lon, max_lat, max_lon)
-        query = query_template.format(bbox=bbox)
+
+        tag = tag if tag else 'building'
+
+        query = query_template.format(bbox=bbox, tag=tag)
         api = overpy.Overpass()
         res = api.query(query)
         mask = np.zeros((self._image_width, self._image_width), dtype=np.uint8)
@@ -145,20 +165,30 @@ class Airtiler:
                 x = pixels_per_lon * (float(node.lon) - min_lon)
                 y = pixels_per_lat * (float(node.lat) - max_lat) * -1
                 points.append((x, y))
+            poly = None
             try:
-                poly = geometry.Polygon(points)
-                if not poly.is_valid:
-                    poly = poly.buffer(0)
-                poly = poly.intersection(self._tile_rect)
+                if "highway" in way.tags:
+                    hw_type = way.tags["highway"]
+                    if hw_type in self.highway_width:
+                        width = self.highway_width[hw_type]
+                        poly = geometry.LineString(points).buffer(width)
+                else:
+                    poly = geometry.Polygon(points)
+                if poly:
+                    if not poly.is_valid:
+                        poly = poly.buffer(0)
+                    poly = poly.intersection(self._tile_rect)
             except:
                 continue
-            self._update_mask(mask, [poly], separate_instances=separate_instances)
+            if poly:
+                self._update_mask(mask, [poly], separate_instances=separate_instances, invert_intersection=invert_intersection)
         if res.ways and mask.max():
             file_name = "{}.tif".format(file_name)
             mask_path = os.path.join(output_directory, file_name)
             img_path = os.path.join(output_directory, file_name + 'f')
             Image.fromarray(mask).save(mask_path)
-            if bing_url and not os.path.isfile(img_path):
+            img_exists = os.path.isfile(img_path)
+            if bing_url and not img_exists:
                 self._download_imagery(bing_url, img_path)
         else:
             print("Tile is empty...")
@@ -172,7 +202,7 @@ class Airtiler:
             shutil.copyfileobj(response.raw, file)
         del response
 
-    def _update_mask(self, mask: np.ndarray, polygons: Iterable, separate_instances: bool = False) -> None:
+    def _update_mask(self, mask: np.ndarray, polygons: Iterable, separate_instances: bool = False, invert_intersection=True) -> None:
         """
          * The first polygon is the exterior ring. All others are treated as interior rings and will just invert
            the corresponding area of the mask.
@@ -198,7 +228,10 @@ class Airtiler:
                 mask[polygon_area] ^= 255
             else:
                 mask[polygon_area] = 255
-            mask[np.nonzero(fillings)] ^= 255
+            if invert_intersection:
+                mask[np.nonzero(fillings)] ^= 255
+            else:
+                mask[np.nonzero(fillings)] = 255
 
     def _process_internal(self, config: dict) -> bool:
         """

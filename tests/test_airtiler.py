@@ -31,6 +31,22 @@ single_building_config = """
 }
 """
 
+roads_building_config = """
+{
+  "options": {
+    "target_dir": "./output",
+    "zoom_levels": [18],
+    "separate_instances": false
+  },
+  "query": {
+    "tag": "highway"
+  }
+  "boundingboxes": {
+    "single_building": [8.8183594613,47.2228679539,8.819253978,47.2234162581]
+  }
+}
+"""
+
 
 def _cleanup(path):
     shutil.rmtree(path, ignore_errors=True)
@@ -54,11 +70,16 @@ def test_single_building_config():
 def test_download_bbox():
     IMG_SIZE = 512
     a = Airtiler(image_width=IMG_SIZE)
-    a.download_bbox(min_lat=47.2236615975,
-                    min_lon=8.8132623492,
-                    max_lat=47.2276689455,
-                    max_lon=8.820407754,
-                    output_directory="./output/download_bbox",
-                    file_name="single_bbox")
+    a.download_bbox(min_lon=8.8132623492, min_lat=47.2236615975, max_lon=8.820407754, max_lat=47.2276689455,
+                    output_directory="./output/download_bbox", file_name="single_bbox")
     img = Image.open("./output/download_bbox/single_bbox.tif")
+    assert img.size == (IMG_SIZE, IMG_SIZE)
+
+
+def test_download_roads():
+    IMG_SIZE = 512
+    a = Airtiler(image_width=IMG_SIZE)
+    a.download_bbox(8.1089472819,47.1770185723,8.110578065,47.1781124768,
+                    output_directory="./output/roads", file_name="roads", tag="highway", invert_intersection=False)
+    img = Image.open("./output/roads/roads.tif")
     assert img.size == (IMG_SIZE, IMG_SIZE)
