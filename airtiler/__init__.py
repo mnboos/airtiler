@@ -57,7 +57,7 @@ class Airtiler:
         return tiles
 
     def _process_bbox(self, bbox_name: str, bbox: Iterable, zoom_level: int, output_directory: str,
-                      separate_instances: bool) -> bool:
+                      separate_instances: bool, tags: Iterable[str]) -> bool:
         if not os.path.isdir(output_directory):
             print("Creating folder: {}".format(output_directory))
             os.makedirs(output_directory)
@@ -82,18 +82,29 @@ class Airtiler:
         if tiles:
             subdomain, tile_url_template = self._get_bing_data()
             bing_url = None
-            for i, t in enumerate(tiles):
+            for i, tile in enumerate(tiles):
                 print("{} @ zoom {}: {:.1f}% (Tile {}/{}) -> {}".format(bbox_name, zoom_level, 100 / nr_tiles * i, i + 1,
-                                                                        nr_tiles, t.tms))
-                tms_x, tms_y = t.tms
+                                                                        nr_tiles, tile.tms))
+                tms_x, tms_y = tile.tms
                 tile_name = "{z}_{x}_{y}".format(z=zoom_level, x=tms_x, y=tms_y)
                 if tile_name in loaded_tiles:
                     continue
 
                 if tile_url_template and subdomain:
-                    bing_url = tile_url_template.format(subdomain=subdomain, quadkey=t.quad_tree)
-                all_downloaded = self._process_tile(output_directory=output_directory, bing_url=bing_url, tile=t,
-                                                    tile_name=tile_name, separate_instances=separate_instances)
+                    bing_url = tile_url_template.format(subdomain=subdomain, quadkey=tile.quad_tree)
+
+                min_lat, min_lon = tile.bounds[0].latitude_longitude
+                max_lat, max_lon = tile.bounds[1].latitude_longitude
+                all_downloaded = self.download_bbox(min_lon=min_lon,
+                                                    min_lat=min_lat,
+                                                    max_lon=max_lon,
+                                                    max_lat=max_lat,
+                                                    output_directory=output_directory,
+                                                    file_name=tile_name,
+                                                    separate_instances=separate_instances,
+                                                    bing_url=bing_url,
+                                                    tags=tags)
+
                 with open(tiles_path, 'a') as f:
                     f.write("{}\n".format(tile_name))
         return all_downloaded
@@ -115,16 +126,6 @@ class Airtiler:
     def _get(coll, index, default):
         return coll[index] if len(coll) > index else default
 
-    def _process_tile(self, output_directory: str, bing_url: str, tile: Tile, tile_name: str,
-                      separate_instances: bool) -> bool:
-        sys.stdout.flush()
-
-        min_lat, min_lon = tile.bounds[0].latitude_longitude
-        max_lat, max_lon = tile.bounds[1].latitude_longitude
-        return self.download_bbox(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat,
-                                  output_directory=output_directory, file_name=tile_name,
-                                  separate_instances=separate_instances, bing_url=bing_url)
-
     highway_width = {
         "motorway": 4,
         "motorway_link": 4,
@@ -141,58 +142,74 @@ class Airtiler:
         # "service": .4,
     }
 
-    def download_bbox(self, min_lon, min_lat, max_lon, max_lat, output_directory, file_name, separate_instances=False,
-                      bing_url=None, tag=None, invert_intersection=True):
-        if not os.path.isdir(output_directory):
-            os.makedirs(output_directory)
-
+    def _get_masks_by_tag(self, tags, min_lon, min_lat, max_lon, max_lat, separate_instances, invert_intersection, verbose):
         offset_lat = max_lat - min_lat
         offset_lon = max_lon - min_lon
         pixels_per_lat = self._image_width / offset_lat
         pixels_per_lon = self._image_width / offset_lon
         bbox = "{},{},{},{}".format(min_lat, min_lon, max_lat, max_lon)
-
-        tag = tag if tag else 'building'
-
-        query = query_template.format(bbox=bbox, tag=tag)
-        api = overpy.Overpass()
-        res = api.query(query)
-        mask = np.zeros((self._image_width, self._image_width), dtype=np.uint8)
-        all_downloaded = False
-        for way in res.ways:
-            points = []
-            for node in way.nodes:
-                x = pixels_per_lon * (float(node.lon) - min_lon)
-                y = pixels_per_lat * (float(node.lat) - max_lat) * -1
-                points.append((x, y))
-            poly = None
-            try:
-                if "highway" in way.tags:
-                    hw_type = way.tags["highway"]
-                    if hw_type in self.highway_width:
-                        width = self.highway_width[hw_type]
-                        poly = geometry.LineString(points).buffer(width)
-                else:
-                    poly = geometry.Polygon(points)
+        mask_by_tag = {}
+        for tag in tags:
+            query = query_template.format(bbox=bbox, tag=tag)
+            api = overpy.Overpass()
+            res = api.query(query)
+            mask = np.zeros((self._image_width, self._image_width), dtype=np.uint8)
+            for way in res.ways:
+                if verbose:
+                    print("Way: ", way)
+                points = []
+                for node in way.nodes:
+                    if verbose:
+                        print("Node: ", node)
+                    x = pixels_per_lon * (float(node.lon) - min_lon)
+                    y = pixels_per_lat * (float(node.lat) - max_lat) * -1
+                    points.append((x, y))
+                poly = None
+                try:
+                    if "highway" in way.tags:
+                        hw_type = way.tags["highway"]
+                        if hw_type in self.highway_width:
+                            width = self.highway_width[hw_type]
+                            poly = geometry.LineString(points).buffer(width)
+                    else:
+                        poly = geometry.Polygon(points)
+                    if poly:
+                        if not poly.is_valid:
+                            poly = poly.buffer(0)
+                        poly = poly.intersection(self._tile_rect)
+                except:
+                    continue
                 if poly:
-                    if not poly.is_valid:
-                        poly = poly.buffer(0)
-                    poly = poly.intersection(self._tile_rect)
-            except:
-                continue
-            if poly:
-                self._update_mask(mask, [poly], separate_instances=separate_instances, invert_intersection=invert_intersection)
-        if res.ways and mask.max():
-            file_name = "{}.tif".format(file_name)
-            mask_path = os.path.join(output_directory, file_name)
-            img_path = os.path.join(output_directory, file_name + 'f')
-            Image.fromarray(mask).save(mask_path)
+                    self._update_mask(mask, [poly], separate_instances=separate_instances,
+                                      invert_intersection=invert_intersection)
+            mask_by_tag[tag] = mask
+        return mask_by_tag
+
+    def download_bbox(self, min_lon, min_lat, max_lon, max_lat, output_directory, file_name, separate_instances=False,
+                      bing_url=None, tags=None, invert_intersection=True, verbose=0):
+        if not os.path.isdir(output_directory):
+            os.makedirs(output_directory)
+
+        if not tags:
+            tags = ['building']
+
+        masks_by_tag = self._get_masks_by_tag(tags, min_lon, min_lat, max_lon, max_lat, separate_instances, invert_intersection, verbose)
+        any_mask_written = False
+        for tag in masks_by_tag:
+            mask = masks_by_tag[tag]
+            if mask.max():
+                any_mask_written = True
+                mask_path = os.path.join(output_directory, "{name}_{tag}.tif".format(name=file_name, tag=tag))
+                Image.fromarray(mask).save(mask_path)
+
+        if any_mask_written:
+            img_path = os.path.join(output_directory, "{}.tiff".format(file_name))
             img_exists = os.path.isfile(img_path)
             if bing_url and not img_exists:
                 self._download_imagery(bing_url, img_path)
         else:
             print("Tile is empty...")
-        return all_downloaded
+        return True
 
     @staticmethod
     def _download_imagery(bing_url, img_path):
@@ -251,6 +268,9 @@ class Airtiler:
         gloabl_zoom_levels = options.get("zoom_levels", [])
         separate_instances = options.get("separate_instances", False)
 
+        query = config.get("query", {})
+        tags = query.get("tags", [])
+
         output_directory = options.get("target_dir", ".")
         if not os.path.isabs(output_directory):
             output_directory = os.path.join(os.getcwd(), output_directory)
@@ -276,7 +296,8 @@ class Airtiler:
                                               bbox=bbox,
                                               zoom_level=z,
                                               output_directory=os.path.join(output_directory, bbox_name),
-                                              separate_instances=separate_instances)
+                                              separate_instances=separate_instances,
+                                              tags=tags)
                 if not complete:
                     all_downloaded = False
         return all_downloaded
