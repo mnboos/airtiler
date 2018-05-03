@@ -66,7 +66,7 @@ def test_single_building_config():
     key = os.environ.get("BING_KEY", "")
     Airtiler(bing_key=key).process(config)
     images = glob.glob("./output/single_building/**/*.tif*", recursive=True)
-    expected_nr_images = 3 if not key else 6  # on travis the bing key is set and therefore the tile can be downloaded
+    expected_nr_images = 3 if not key else 5  # on travis the bing key is set and therefore the tile can be downloaded
     assert len(images) == expected_nr_images
 
 
