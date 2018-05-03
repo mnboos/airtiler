@@ -88,6 +88,9 @@ Sample config
         "zoom_levels": [15, 16, 17],
         "separate_instances": false
       },
+      "query": {
+        "tags": ["highway", "building"]
+      },
       "boundingboxes": {
         "firenze": [11.239844, 43.765851, 11.289969, 43.790065],
         "rapperswil": {
@@ -117,7 +120,7 @@ The airtiler is used in the following projects:
 
 .. |Build Status| image:: https://travis-ci.org/mnboos/airtiler.svg?branch=master
    :target: https://travis-ci.org/mnboos/airtiler
-.. |image1| image:: images/image2.png
-.. |image2| image:: images/mask2.png
-.. |image3| image:: images/image1.png
-.. |image4| image:: images/mask1.png
+.. |image1| image:: https://github.com/mnboos/airtiler/blob/master/images/image2.png
+.. |image2| image:: https://github.com/mnboos/airtiler/blob/master/images/mask2.png
+.. |image3| image:: https://github.com/mnboos/airtiler/blob/master/images/image1.png
+.. |image4| image:: https://github.com/mnboos/airtiler/blob/master/images/mask1.png

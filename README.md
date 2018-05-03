@@ -52,6 +52,9 @@ separate_instances|If true, each building instance will be separated. Otherwise,
     "zoom_levels": [15, 16, 17],
     "separate_instances": false
   },
+  "query": {
+    "tags": ["highway", "building"]
+  },
   "boundingboxes": {
     "firenze": [11.239844, 43.765851, 11.289969, 43.790065],
     "rapperswil": {

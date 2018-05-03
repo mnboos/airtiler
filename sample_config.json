@@ -4,6 +4,9 @@
     "zoom_levels": [18, 19],
     "separate_instances": false
   },
+  "query": {
+    "tags": ["highway", "building"]
+  },
   "boundingboxes": {
     "firenze": [11.239844, 43.765851, 11.289969, 43.790065],
     "rapperswil": {
