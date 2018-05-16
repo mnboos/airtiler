@@ -89,7 +89,7 @@ Sample config
         "separate_instances": false
       },
       "query": {
-        "tags": ["highway", "building"]
+        "tags": ["highway", "building", "leisure=swimming_pool"]
       },
       "boundingboxes": {
         "firenze": [11.239844, 43.765851, 11.289969, 43.790065],

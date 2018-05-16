@@ -19,13 +19,19 @@ import random
 query_template = """
 [out:json][timeout:50];
 ( 
-  relation["{tag}"]({bbox});
-  way["{tag}"]({bbox});
+  relation[{tag}]({bbox});
+  way[{tag}]({bbox});
 );
 //out geom;
 (._;>;);
 out body;
 """
+
+
+def first(iterable):
+    if iterable:
+        return iterable[0]
+    return None
 
 
 class Airtiler:
@@ -150,17 +156,39 @@ class Airtiler:
         bbox = "{},{},{},{}".format(min_lat, min_lon, max_lat, max_lon)
         mask_by_tag = {}
         for tag in tags:
-            query = query_template.format(bbox=bbox, tag=tag)
+            if "=" in tag:
+                attr, value = tag.split("=")
+                query_tag = "\"{}\"=\"{}\"".format(attr, value)
+                tag = value
+            else:
+                query_tag = "\"{}\"".format(tag)
+            query = query_template.format(bbox=bbox, tag=query_tag)
             api = overpy.Overpass()
             res = api.query(query)
             mask = np.zeros((self._image_width, self._image_width), dtype=np.uint8)
+            handled_way_ids = []
+            for rel in res.relations:
+                points = []
+                for mem in rel.members:
+                    print(mem)
+                    if mem.role == "outer":
+                        way = first(list(filter(lambda n: n.id == mem.ref, res.ways)))
+                        if way:
+                            handled_way_ids.append(way.id)
+                            for node in way.nodes:
+                                x = pixels_per_lon * (float(node.lon) - min_lon)
+                                y = pixels_per_lat * (float(node.lat) - max_lat) * -1
+                                points.append((x, y))
+                    else:
+                        pass
+                poly = geometry.Polygon(points)
+                self._process_polygon(mask, poly, separate_instances, invert_intersection, verbose)
+
             for way in res.ways:
-                if verbose:
-                    print("Way: ", way)
+                if way.id in handled_way_ids:
+                    continue
                 points = []
                 for node in way.nodes:
-                    if verbose:
-                        print("Node: ", node)
                     x = pixels_per_lon * (float(node.lon) - min_lon)
                     y = pixels_per_lat * (float(node.lat) - max_lat) * -1
                     points.append((x, y))
@@ -173,17 +201,20 @@ class Airtiler:
                             poly = geometry.LineString(points).buffer(width)
                     else:
                         poly = geometry.Polygon(points)
-                    if poly:
-                        if not poly.is_valid:
-                            poly = poly.buffer(0)
-                        poly = poly.intersection(self._tile_rect)
                 except:
                     continue
-                if poly:
-                    self._update_mask(mask, [poly], separate_instances=separate_instances,
-                                      invert_intersection=invert_intersection)
+                self._process_polygon(mask, poly, separate_instances, invert_intersection, verbose)
             mask_by_tag[tag] = mask
         return mask_by_tag
+
+    def _process_polygon(self, mask, poly, separate_instances, invert_intersection, verbose=0):
+        if poly:
+            if not poly.is_valid:
+                poly = poly.buffer(0)
+            poly = poly.intersection(self._tile_rect)
+            if verbose:
+                print(poly.wkt)
+            self._update_mask(mask, [poly], separate_instances=separate_instances, invert_intersection=invert_intersection)
 
     def download_bbox(self, min_lon, min_lat, max_lon, max_lat, output_directory, file_name, separate_instances=False,
                       bing_url=None, tags=None, invert_intersection=True, verbose=0):
@@ -230,7 +261,7 @@ class Airtiler:
         """
         for i, p in enumerate(polygons):
             if isinstance(p, geometry.MultiPolygon):
-                self._update_mask(mask, p.geoms, True)
+                self._update_mask(mask=mask, polygons=p.geoms, separate_instances=True)
                 continue
             elif not isinstance(p, geometry.Polygon):
                 continue
