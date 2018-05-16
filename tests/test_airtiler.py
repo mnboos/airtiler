@@ -109,7 +109,7 @@ def test_download_vineyard_seengen():
     IMG_SIZE = 512
     a = Airtiler(image_width=IMG_SIZE)
     a.download_bbox(8.2101117454,47.3099180991,8.2247029624,47.3191922714,
-                    output_directory="./output/vineyard", file_name="seengen", tags=["landuse=vineyard"], invert_intersection=False, verbose=1)
+                    output_directory="./output/vineyard", file_name="seengen", tags=["landuse=vineyard"], invert_intersection=False, verbose=0)
     img = Image.open("./output/vineyard/seengen_vineyard.tif")
     assert img.size == (IMG_SIZE, IMG_SIZE)
 
@@ -118,6 +118,15 @@ def test_download_swimming_pool_seengen():
     IMG_SIZE = 512
     a = Airtiler(image_width=IMG_SIZE)
     a.download_bbox(8.210252472,47.3158741942,8.2144152604,47.3188490452,
-                    output_directory="./output/pool", file_name="seengen", tags=["leisure=swimming_pool"], invert_intersection=False, verbose=1)
+                    output_directory="./output/pool", file_name="seengen", tags=["leisure=swimming_pool"], invert_intersection=False, verbose=0)
     img = Image.open("./output/pool/seengen_swimming_pool.tif")
+    assert img.size == (IMG_SIZE, IMG_SIZE)
+
+
+def test_download_building_with_hole_seengen():
+    IMG_SIZE = 512
+    a = Airtiler(image_width=IMG_SIZE)
+    a.download_bbox(8.1930997454,47.3228237375,8.1939634167,47.3234346427,
+                    output_directory="./output/building_with_hole", file_name="seengen", tags=["building"], invert_intersection=False, verbose=1)
+    img = Image.open("./output/building_with_hole/seengen_building.tif")
     assert img.size == (IMG_SIZE, IMG_SIZE)

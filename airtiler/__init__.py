@@ -168,21 +168,28 @@ class Airtiler:
             mask = np.zeros((self._image_width, self._image_width), dtype=np.uint8)
             handled_way_ids = []
             for rel in res.relations:
-                points = []
+                outer_points = []
+                inner_point_lists = []
                 for mem in rel.members:
                     print(mem)
-                    if mem.role == "outer":
-                        way = first(list(filter(lambda n: n.id == mem.ref, res.ways)))
-                        if way:
-                            handled_way_ids.append(way.id)
-                            for node in way.nodes:
-                                x = pixels_per_lon * (float(node.lon) - min_lon)
-                                y = pixels_per_lat * (float(node.lat) - max_lat) * -1
-                                points.append((x, y))
+                    way = first(list(filter(lambda n: n.id == mem.ref, res.ways)))
+                    if way:
+                        handled_way_ids.append(way.id)
+                        current_points = []
+                        for node in way.nodes:
+                            x = pixels_per_lon * (float(node.lon) - min_lon)
+                            y = pixels_per_lat * (float(node.lat) - max_lat) * -1
+                            current_points.append((x, y))
+                        if mem.role == "outer":
+                            outer_points.extend(current_points)
+                        else:
+                            inner_point_lists.append(current_points)
+                if outer_points:
+                    if inner_point_lists:
+                        poly = geometry.Polygon(outer_points, inner_point_lists)
                     else:
-                        pass
-                poly = geometry.Polygon(points)
-                self._process_polygon(mask, poly, separate_instances, invert_intersection, verbose)
+                        poly = geometry.Polygon(outer_points)
+                    self._process_polygon(mask, poly, separate_instances, invert_intersection, verbose)
 
             for way in res.ways:
                 if way.id in handled_way_ids:
@@ -209,6 +216,8 @@ class Airtiler:
 
     def _process_polygon(self, mask, poly, separate_instances, invert_intersection, verbose=0):
         if poly:
+            if verbose:
+                print(poly.wkt)
             if not poly.is_valid:
                 poly = poly.buffer(0)
             poly = poly.intersection(self._tile_rect)
@@ -267,10 +276,14 @@ class Airtiler:
                 continue
             outline = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
             fill = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
+            holes = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
             ImageDraw.Draw(outline).polygon(p.exterior.coords, fill=0, outline=255)
             ImageDraw.Draw(fill).polygon(p.exterior.coords, fill=255, outline=0)
+            for h in p.interiors:
+                ImageDraw.Draw(holes).polygon(h.coords, fill=255, outline=255)
             outlines = np.array(outline, dtype=np.uint8)
             fillings = np.array(fill, dtype=np.uint8)
+            hole_fillings = np.array(holes, dtype=np.uint8)
             polygon_area = np.nonzero(outlines)
             if separate_instances:
                 mask[polygon_area] ^= 255
@@ -280,6 +293,7 @@ class Airtiler:
                 mask[np.nonzero(fillings)] ^= 255
             else:
                 mask[np.nonzero(fillings)] = 255
+            mask[np.nonzero(hole_fillings)] = 0
 
     def _process_internal(self, config: dict) -> bool:
         """
