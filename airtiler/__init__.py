@@ -228,7 +228,8 @@ class Airtiler:
             poly = poly.intersection(self._tile_rect)
             if verbose:
                 print(poly.wkt)
-            self._update_mask(mask, [poly], separate_instances=separate_instances)
+            if poly.area >= 100:
+                self._update_mask(mask, [poly], separate_instances=separate_instances)
 
     def download_bbox(self, min_lon, min_lat, max_lon, max_lat, output_directory, file_name, separate_instances=False,
                       bing_url=None, tags=None, verbose=0):
