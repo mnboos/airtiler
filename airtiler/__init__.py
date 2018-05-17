@@ -144,7 +144,8 @@ class Airtiler:
         "steps": 0,
         "track": 0,
         "path": 0,
-        "cycleway": 0
+        "cycleway": 0,
+        "elevator": 0
     }
 
     def _get_masks_by_tag(self, tags, min_lon, min_lat, max_lon, max_lat, separate_instances, verbose):
