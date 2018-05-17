@@ -101,15 +101,9 @@ class Airtiler:
 
                 min_lat, min_lon = tile.bounds[0].latitude_longitude
                 max_lat, max_lon = tile.bounds[1].latitude_longitude
-                all_downloaded = self.download_bbox(min_lon=min_lon,
-                                                    min_lat=min_lat,
-                                                    max_lon=max_lon,
-                                                    max_lat=max_lat,
-                                                    output_directory=output_directory,
-                                                    file_name=tile_name,
-                                                    separate_instances=separate_instances,
-                                                    bing_url=bing_url,
-                                                    tags=tags)
+                all_downloaded = self.download_bbox(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat,
+                                                    output_directory=output_directory, file_name=tile_name,
+                                                    separate_instances=separate_instances, bing_url=bing_url, tags=tags)
 
                 with open(tiles_path, 'a') as f:
                     f.write("{}\n".format(tile_name))
@@ -153,7 +147,7 @@ class Airtiler:
         "cycleway": 0
     }
 
-    def _get_masks_by_tag(self, tags, min_lon, min_lat, max_lon, max_lat, separate_instances, invert_intersection, verbose):
+    def _get_masks_by_tag(self, tags, min_lon, min_lat, max_lon, max_lat, separate_instances, verbose):
         offset_lat = max_lat - min_lat
         offset_lon = max_lon - min_lon
         pixels_per_lat = self._image_width / offset_lat
@@ -194,7 +188,7 @@ class Airtiler:
                         poly = geometry.Polygon(outer_points, inner_point_lists)
                     else:
                         poly = geometry.Polygon(outer_points)
-                    self._process_polygon(mask, poly, separate_instances, invert_intersection, verbose)
+                    self._process_polygon(mask, poly, separate_instances, verbose)
 
             for way in res.ways:
                 if way.id in handled_way_ids:
@@ -220,11 +214,11 @@ class Airtiler:
                         poly = geometry.Polygon(points)
                 except:
                     continue
-                self._process_polygon(mask, poly, separate_instances, invert_intersection, verbose)
+                self._process_polygon(mask, poly, separate_instances, verbose)
             mask_by_tag[tag] = mask
         return mask_by_tag
 
-    def _process_polygon(self, mask, poly, separate_instances, invert_intersection, verbose=0):
+    def _process_polygon(self, mask, poly, separate_instances, verbose=0):
         if poly:
             if verbose:
                 print(poly.wkt)
@@ -236,14 +230,14 @@ class Airtiler:
             self._update_mask(mask, [poly], separate_instances=separate_instances)
 
     def download_bbox(self, min_lon, min_lat, max_lon, max_lat, output_directory, file_name, separate_instances=False,
-                      bing_url=None, tags=None, invert_intersection=True, verbose=0):
+                      bing_url=None, tags=None, verbose=0):
         if not os.path.isdir(output_directory):
             os.makedirs(output_directory)
 
         if not tags:
             tags = ['building']
 
-        masks_by_tag = self._get_masks_by_tag(tags, min_lon, min_lat, max_lon, max_lat, separate_instances, invert_intersection, verbose)
+        masks_by_tag = self._get_masks_by_tag(tags, min_lon, min_lat, max_lon, max_lat, separate_instances, verbose)
         any_mask_written = False
         for tag in masks_by_tag:
             mask = masks_by_tag[tag]
