@@ -279,24 +279,14 @@ class Airtiler:
                 continue
             elif not isinstance(p, geometry.Polygon):
                 continue
-            outline = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
-            fill = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
+            poly_area = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
             holes = Image.fromarray(np.zeros(mask.shape, dtype=np.uint8))
-            ImageDraw.Draw(outline).polygon(p.exterior.coords, fill=0, outline=255)
-            ImageDraw.Draw(fill).polygon(p.exterior.coords, fill=255, outline=0)
+            outline_color = 0 if separate_instances else 255
+            ImageDraw.Draw(poly_area).polygon(p.exterior.coords, fill=255, outline=outline_color)
             for h in p.interiors:
                 ImageDraw.Draw(holes).polygon(h.coords, fill=255, outline=255)
-            outlines = np.array(outline, dtype=np.uint8)
-            fillings = np.array(fill, dtype=np.uint8)
-            hole_fillings = np.array(holes, dtype=np.uint8)
-            polygon_area = np.nonzero(outlines)
-            if separate_instances:
-                mask[polygon_area] ^= 255
-            else:
-                mask[polygon_area] = 255
-
-            mask[np.nonzero(fillings)] = 255
-            mask[np.nonzero(hole_fillings)] = 0
+            mask[np.nonzero(np.array(poly_area, dtype=np.uint8))] = 255
+            mask[np.nonzero(np.array(holes, dtype=np.uint8))] = 0
 
     def _process_internal(self, config: dict) -> bool:
         """

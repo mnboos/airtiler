@@ -34,6 +34,22 @@ single_building_config = """
 }
 """
 
+separate_buildings_config = """
+{
+  "options": {
+    "target_dir": "./output",
+    "zoom_levels": [18],
+    "separate_instances": true
+  },
+  "query": {
+    "tags": ["building"]
+  },
+  "boundingboxes": {
+    "separate_building": [8.5366744513,47.3663995407,8.5375408048,47.3670426416]
+  }
+}
+"""
+
 roads_config = """
 {
   "options": {
@@ -106,6 +122,14 @@ def test_download_roads():
     config = json.loads(roads_config)
     get_airtiler(set_key=True, image_size=256).process(config)
     img = Image.open("./output/roads/18/18_137282_170333.tiff")
+    assert img.size == (256, 256)
+
+
+def test_separate_building():
+    _cleanup("./output/separate_building")
+    config = json.loads(separate_buildings_config)
+    get_airtiler(set_key=True).process(config)
+    img = Image.open("./output/separate_building/18/18_137288_170333.tiff")
     assert img.size == (256, 256)
 
 
