@@ -147,7 +147,9 @@ class Airtiler:
         "residential": 5,
         "service": 0,
         "footway": 0,
-        "steps": 0
+        "steps": 0,
+        "path": 0,
+        "cycleway": 0
     }
 
     def _get_masks_by_tag(self, tags, min_lon, min_lat, max_lon, max_lat, separate_instances, invert_intersection, verbose):
