@@ -133,19 +133,21 @@ class Airtiler:
         return coll[index] if len(coll) > index else default
 
     highway_width = {
-        "motorway": 4,
-        "motorway_link": 4,
-        "trunk": 4,
-        "trunk_link": 4,
-        "primary": 4,
-        "primary_link": 4,
-        "secondary": 2,
-        "secondary_link": 2,
-        "tertiary": 1.5,
-        "tertiary_link": 1.5,
-        "unclassified": 1.5,
-        "residential": 1.5,
-        # "service": .4,
+        "motorway": 8,
+        "motorway_link": 8,
+        "trunk": 8,
+        "trunk_link": 8,
+        "primary": 8,
+        "primary_link": 8,
+        "secondary": 6,
+        "secondary_link": 6,
+        "tertiary": 5,
+        "tertiary_link": 5,
+        "unclassified": 5,
+        "residential": 5,
+        "service": 0,
+        "footway": 0,
+        "steps": 0
     }
 
     def _get_masks_by_tag(self, tags, min_lon, min_lat, max_lon, max_lat, separate_instances, invert_intersection, verbose):
@@ -203,9 +205,14 @@ class Airtiler:
                 try:
                     if "highway" in way.tags:
                         hw_type = way.tags["highway"]
+                        is_tunnel = "tunnel" in way.tags
+                        if is_tunnel:
+                            continue
                         if hw_type in self.highway_width:
                             width = self.highway_width[hw_type]
                             poly = geometry.LineString(points).buffer(width)
+                        else:
+                            print("Unknown highway type: ", hw_type)
                     else:
                         poly = geometry.Polygon(points)
                 except:
@@ -223,7 +230,7 @@ class Airtiler:
             poly = poly.intersection(self._tile_rect)
             if verbose:
                 print(poly.wkt)
-            self._update_mask(mask, [poly], separate_instances=separate_instances, invert_intersection=invert_intersection)
+            self._update_mask(mask, [poly], separate_instances=separate_instances)
 
     def download_bbox(self, min_lon, min_lat, max_lon, max_lat, output_directory, file_name, separate_instances=False,
                       bing_url=None, tags=None, invert_intersection=True, verbose=0):
@@ -259,7 +266,7 @@ class Airtiler:
             shutil.copyfileobj(response.raw, file)
         del response
 
-    def _update_mask(self, mask: np.ndarray, polygons: Iterable, separate_instances: bool = False, invert_intersection=True) -> None:
+    def _update_mask(self, mask: np.ndarray, polygons: Iterable, separate_instances: bool = False) -> None:
         """
          * The first polygon is the exterior ring. All others are treated as interior rings and will just invert
            the corresponding area of the mask.
@@ -289,10 +296,8 @@ class Airtiler:
                 mask[polygon_area] ^= 255
             else:
                 mask[polygon_area] = 255
-            if invert_intersection:
-                mask[np.nonzero(fillings)] ^= 255
-            else:
-                mask[np.nonzero(fillings)] = 255
+
+            mask[np.nonzero(fillings)] = 255
             mask[np.nonzero(hole_fillings)] = 0
 
     def _process_internal(self, config: dict) -> bool:
