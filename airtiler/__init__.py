@@ -148,6 +148,7 @@ class Airtiler:
         "service": 0,
         "footway": 0,
         "steps": 0,
+        "track": 0,
         "path": 0,
         "cycleway": 0
     }
